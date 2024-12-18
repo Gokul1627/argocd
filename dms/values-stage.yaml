@@ -1,0 +1,194 @@
+# Default values for dms
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+# name: dms
+namespace: dms
+replicaCount: 1
+revisionHistoryLimit: 10
+minReadySeconds: 0
+
+rollbackWindow:
+  revisions: 0
+environment: dev
+podAnnotations: {}
+
+securityContext: {}
+
+image:
+  repository: 891377316540.dkr.ecr.ap-south-1.amazonaws.com/dms
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: v_276bfdd_2024_11_07_05_24
+
+resources:
+  limits:
+    cpu: "200m"
+    memory: "512Mi"
+  requests:
+    cpu: "200m"
+    memory: "512Mi"
+
+ports:
+  - name: http
+    containerPort: 80
+    protocol: TCP
+
+ingress:
+  enabled: false
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 60
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600
+      policies:
+        - type: Percent
+          value: 20
+          periodSeconds: 300
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 20
+          periodSeconds: 15
+        - type: Pods
+          value: 2
+          periodSeconds: 15
+      selectPolicy: Max
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::471112811053:role/dms_service_account_role"
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: "dms-sa"
+
+  # Define volumes
+volumes:
+  - name: secrets-store-inline
+    csi:
+      driver: secrets-store.csi.k8s.io
+      readOnly: true
+      volumeAttributes:
+        secretProviderClass: dms # Prefer to keep it same as chart name
+#   - name: data-volume
+#     emptyDir: {} # Example of an emptyDir volume
+
+# Define volume mounts
+volumeMounts:
+  - name: secrets-store-inline
+    mountPath: /mnt/secrets-store
+    readOnly: true
+    # - name: data-volume
+    #   mountPath: /path/to/data
+    #   readOnly: false
+
+createSecret: true
+secretpath: /mnt/secrets-store
+SecretProviderClass:
+  objects:
+    - objectName: "arn:aws:secretsmanager:ap-south-1:471112811053:secret:ap-south-1-staging-dms-secret-rBrxZ0"
+      objectType: "secretsmanager"
+      objectAlias: "config.json"
+      region: "ap-south-1"
+
+createService: true
+service:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+
+#cmd: ["node"]
+#args: ["-e", "setInterval(() => console.log('Running...'), 10000)"]
+
+# Probes
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 30
+  failureThreshold: 3
+  periodSeconds: 10
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 30
+  failureThreshold: 1
+  periodSeconds: 10
+
+startupProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 30
+  failureThreshold: 12
+  periodSeconds: 10
+
+pdbSettings:
+  createPdb: false
+  minAvailable: 1
+  maxUnavailable: 1
+
+nodeSelector: {}
+
+affinity: {}
+
+tolerations: {}
+
+createConfigMap: true
+configMapData:
+  PORT: "80"
+  NODE_ENV: beta
+  DB_TYPE: postgres
+  DB_HOST: ideaclan-staging-db.c7cwmo60imje.ap-south-1.rds.amazonaws.com
+  DB_PORT: "5432"
+
+  DB_NAME: dms
+  UMS_SERVICE: http://fab-ums.fab-ums
+
+  RABBITMQ_HOST: b-69fd5013-227b-4cf7-aac1-e3186b97e0dc.mq.ap-south-1.amazonaws.com
+  RABBITMQ_PORT: "5671"
+
+  REDIS_PRIMARY_HOST: ideaclan-redis-cluster.rdn66d.ng.0001.aps1.cache.amazonaws.com
+  REDIS_READER_HOST: ideaclan-redis-cluster-ro.rdn66d.ng.0001.aps1.cache.amazonaws.com
+  REDIS_PORT: "6379"
+
+  RABBITMQ_EXCHANGE: dms.exchange
+  RABBITMQ_KEY: dms.domain.sync
+  RABBITMQ_QUEUE: dms.domains
+  RABBITMQ_SAS_DOMAIN_SYNC_QUEUE: dms.sas.domain.sync
+  RABBITMQ_SAS_DOMAIN_SYNC_KEY: dms.sas.domain_sync.key
+  RABBITMQ_FB360_DOMAIN_QUEUE: dms.fb360.domain
+  RABBITMQ_FB360_DOMAIN_KEY: dms.fb360.domain.key
+  RABBITMQ_FB_EXCHANGE: lf.facebook.exchange
+  RABBITMQ_FB_KEY: lf.facebook.sync
+
+  PROXY_ENABLED: "true"
+  PROXY_PROTOCOL: http
+  PROXY_HOST: "18.142.39.120"
+  PROXY_PORT: "9211"
+
+  AWS_REGION: ap-south-1
+  KAFKA_CLIENT: FAB-BETA-KAFKA
+  KAFKA_BROKER: "pkc-l7pr2.ap-south-1.aws.confluent.cloud:9092"
+  KAFKA_SASL_MECHANISM: PLAIN
+  KAFKA_SSL: "true"
+  
+  NAMECHEAP_KEY: "97473ca737c348af9f66a27c5b8044467"
+
+
+createAppSecret: false
+secret:
+  data:
